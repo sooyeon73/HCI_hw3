@@ -1,0 +1,963 @@
+<!doctype html>
+<html lang="ko">
+<head>
+	<meta charset="utf-8" />
+	<title>Direct Manipulation of Math Symbols</title>
+</head>
+
+<body>
+    <script src='https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js' type='text/javascript'></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/2.4.6/fabric.min.js" type="text/javascript"></script>
+    <script src="source/math.min.js" type="text/javascript"></script>
+
+    <canvas id="c" width="1400" height="700">
+        Canvas not supported
+    </canvas>
+
+    <script>
+        const parser = math.parser();
+
+        const SYMBOL_WIDTH = 50;
+        const SYMBOL_HEIGHT = 50;
+
+        let MathApp = {};
+        MathApp.count = 0;
+        MathApp.symbol_paths = {
+                '+':    "add",
+                '-':    "sub",
+                '*':    "mul",
+                '/':    "div",
+                '(':    "parenthesis_open",
+                ')':    "parenthesis_close",
+                '[':    "squarebracket_open",
+                ']':    "squarebracket_close",
+                '{':    "curlybrace_open",
+                '}':    "curlybrace_close",
+                '.':    "period",
+                ',':    "comma",
+                ':':    "colon",
+                ';':    "semicolon",
+                '=':    "equal",
+                '>':    "more",
+                '<':    "less",
+                '!':    "exclamation"
+        };
+
+        MathApp.blocks = [];
+        MathApp.selected_block = null;
+        MathApp.buttons = [];
+
+        MathApp.is_mouse_dragging = false;       
+        MathApp.mouse_drag_prev = {x:0, y:0};
+
+        MathApp.block_types = {
+            UNDEFINED:  "undefind",
+            SYMBOL:     "symbol",
+            BUTTON:     "button"
+                };
+
+
+        MathApp.initialize = function() {
+
+            for(let i=0; i <= 9; i++)
+            {
+                let key = i.toString();
+                let value = key;
+                this.symbol_paths[key] = value;
+            }
+
+            for(let c="a".charCodeAt(0); c <= "z".charCodeAt(0); c++)
+            {
+                let key = String.fromCharCode(c);
+                let value = key;
+                this.symbol_paths[key] = value;
+            }
+
+            this.canvas = new fabric.Canvas("c", {
+                backgroundColor: "#eee",
+                hoverCursor: "default",
+                selection: false
+            });
+
+            //
+            $(document).keypress(function(event) {
+                
+                let key = String.fromCharCode(event.which);
+                if(event.which==13){
+                    key="enter";
+                };
+                MathApp.handleKeyPress(key);
+            });
+            $(document).mousedown(function(event) {
+                let p = {x: event.pageX, y: event.pageY};
+                MathApp.handleMouseDown(p);
+            });
+            $(document).mouseup(function(event) {
+                let p = {x: event.pageX, y: event.pageY};
+                MathApp.handleMouseUp(p);
+            });
+            $(document).mousemove(function(event) {
+                let p = {x: event.pageX, y: event.pageY};
+                MathApp.handleMouseMove(p);
+            });
+
+            MathApp.start();
+        }
+
+
+
+        MathApp.start=function(){
+            let a = new MathApp.Button({x:15,y:15},{width:65,height:40},"SPLIT");
+            MathApp.buttons.push(a);
+
+            let b = new MathApp.Button({x:95,y:15},{width:65,height:40},"COPY");
+            MathApp.buttons.push(b);
+            
+            let c = new MathApp.Button({x:175,y:15},{width:65,height:40},"RESET");
+            MathApp.buttons.push(c);
+
+            let d = new MathApp.Button({x:260,y:15},{width:65,height:40},"CALC");
+            d.visual_items[0].fill="#ff7473";
+            d.visual_items[1].fill="white";
+
+            MathApp.buttons.push(d);
+        }
+        /* 새로운 블럭 생성 */ 
+        MathApp.handleKeyPress = function(key) {
+
+            if (key in this.symbol_paths) 
+            {
+                let size = {
+                    width : SYMBOL_WIDTH,
+                    height : SYMBOL_HEIGHT
+                };
+
+                let position = {
+                    x : Math.random()*(this.canvas.width-100)+50,
+                    y : 0
+                };
+                
+                if(key=="+"||key=="-"||key=="*"||key=="/")
+                    position.y=100;
+                else if(key=='0'||key=='1'||key=='2'||key=='3'||key=='4'
+                ||key=='5'||key=='6'||key=='7'||key=='8'||key=='9')
+                    position.y=200;
+                else if (key=='<'||key=='>'||key=='!'||key=='=')
+                    position.y=400;
+                else if ( key=='('||key==')'||key=='['||key==']'||key=='{'||key=='}'||
+                key=='.'|| key==','||key==':'||key==';')
+                    position.y=500;
+                else
+                    position.y=300;
+                    
+                let new_symbol = new MathApp.Symbol(position, size, key);
+            }
+            if (key=="enter"){
+                //계산
+                MathApp.Calc();
+            }
+            
+        }
+
+        MathApp.Calc = function(){
+            console.log(MathApp.selected_block);
+
+            let p = MathApp.selected_block;
+            while(p.prev!=null){
+                p=p.prev;
+            }
+            //p==head
+            
+            var calc =p.name;
+            let n= p;
+            while(n.next!=null){
+                n=n.next;
+                calc+=n.name;
+                console.log(calc);
+            }
+            //식 도출
+            //계산
+            try
+            {
+                result =parser.eval(calc).toString();
+                var tokens = result.split(' ');
+                if(tokens[0] == 'function')
+                {
+                    result = tokens[0];
+                }
+                if(tokens[0]=="function(e,t){return"){
+                    console.log("aa");
+                    let text = new fabric.Text(calc, {  left: 900,  top: 70 + MathApp.count*46, selectable: false,
+                       fill: "black" ,fontSize: 22 });
+                     MathApp.canvas.add(text);
+
+                }
+                else{
+                    let text = new fabric.Text(calc+"= "+result, {   left: 900,top: 70 + MathApp.count*46,  selectable: false,
+                       fill: "black"   ,       fontSize: 22
+                     });
+                     MathApp.canvas.add(text);
+
+                
+                }
+                    calc = '0';
+            }
+            catch (e)
+            {
+                calc = '0';
+                if(calc != 'function')
+            {
+
+                console.log(e);
+                let text = new fabric.Text("잘못된 수식입니다.", {
+                        left: 900,
+                         top: 70 + MathApp.count*50,
+                        selectable: false,
+                       fill: "black"
+                       ,
+                       fontSize: 28
+                     });
+                MathApp.canvas.add(text);
+            }
+          
+            } 
+            MathApp.count++;
+
+                        
+
+        }
+
+        MathApp.handleMouseDown = function(window_p) {
+            if(MathApp.isInCanvas(window_p))
+            {
+                let canvas_p = MathApp.transformToCanvasCoords(window_p);
+                MathApp.Reset(canvas_p);
+
+                if( MathApp.selected_block != null )
+                {
+                    MathApp.Split(canvas_p);
+                    MathApp.Copy(canvas_p);
+                    MathApp.Result(canvas_p);
+                    MathApp.selected_block.onDeselected();
+                    MathApp.selected_block = null;
+                }
+
+                let block = MathApp.findBlockOn(canvas_p);
+                if(block != null)
+                {
+                    MathApp.selected_block = block;
+                    MathApp.selected_block.onSelected();
+                }
+
+                MathApp.is_mouse_dragging = true;
+                MathApp.mouse_drag_prev = canvas_p;
+
+                MathApp.canvas.requestRenderAll();
+            }
+            else
+            {
+                MathApp.is_mouse_dragging = false;
+                MathApp.mouse_drag_prev = {x:0, y:0};
+            }
+        }
+
+        MathApp.handleMouseMove = function(window_p) {
+            if(MathApp.is_mouse_dragging)
+            {
+                let canvas_p = MathApp.transformToCanvasCoords(window_p);
+                if(MathApp.selected_block != null)
+                {  let tx = canvas_p.x - MathApp.mouse_drag_prev.x;
+                    let ty = canvas_p.y - MathApp.mouse_drag_prev.y;
+
+                    
+                    MathApp.selected_block.translate({x: tx, y: ty});
+                    
+                    if(MathApp.selected_block.block_order!="single")
+                    {
+                        let p = MathApp.selected_block.prev;
+                        while(p!=null){
+                            p.translate({x: tx, y: ty});
+                            p=p.prev;
+                        }
+                        
+                        let n= MathApp.selected_block.next;
+                        while(n!=null){
+                            n.translate({x: tx, y: ty});
+                            n=n.next;
+                        }    
+                    }
+
+                    
+      
+                }
+                MathApp.mouse_drag_prev = canvas_p;
+
+                MathApp.canvas.requestRenderAll();
+            }
+        }
+
+        MathApp.handleMouseUp = function(window_p) {
+            if(MathApp.is_mouse_dragging)
+            {
+                let canvas_p = MathApp.transformToCanvasCoords(window_p);
+
+                MathApp.is_mouse_dragging = false;
+                MathApp.mouse_drag_prev = {x:0, y:0};
+
+                if( MathApp.selected_block != null )
+{
+                    // 결합 조건 확인
+
+                    MathApp.blocks.forEach(b=>{
+                        if(b!=MathApp.selected_block){
+                            // 본인이 아닌 블럭에 대하여    
+
+                           //오른쪽 결합
+                            if(b.position.x< MathApp.selected_block.position.x
+                            && MathApp.selected_block.position.x<=b.position.x+SYMBOL_WIDTH
+                            && MathApp.selected_block.position.y<=b.position.y+SYMBOL_HEIGHT
+                            && b.position.y-SYMBOL_HEIGHT<MathApp.selected_block.position.y
+                            ){
+
+                                if(b.block_order!="head"&&b.block_order!="none"){
+
+                                    MathApp.selected_block.moveTo ({x: b.position.x+b.size.width, y: b.position.y});
+
+                                    b.visual_items[2].set({ stroke:  "#4ea1d3", strokeWidth : 1 });                            
+                                    MathApp.selected_block.visual_items[2].set({ stroke:  "#4ea1d3", strokeWidth : 1}); 
+
+                                    MathApp.selected_block.prev=b;
+                                    b.next=MathApp.selected_block;
+                                
+                                if(b.block_order=="single"){                                                            
+                                b.block_order="head";
+                                
+                                // single <- single
+                                if(MathApp.selected_block.block_order=="single"){
+                                MathApp.selected_block.block_order="tail";
+
+                                let boundary = new fabric.Rect({
+                                    left: b.position.x - b.size.width/2-2.5,
+                                    top: b.position.y - b.size.height/2-2.5,
+                                    width: b.size.width*2,
+                                    height: b.size.height,
+                                    fill: "rgba(0,0,0,0)",
+                                    stroke: "#4ea1d3",
+                                    strokeWidth: 5,
+                                    selectable: false
+                                });
+                                MathApp.canvas.add(boundary);
+                                b.visual_items.push(boundary);
+                                }
+                                
+                                // single <- set
+                                else if(MathApp.selected_block.block_order=="head"){
+                                    MathApp.selected_block.block_order="none";
+                                    let n = MathApp.selected_block;
+                                    let c = 1;
+
+                                    while(n.next!=null){
+                                        n= n.next;
+                                        n.moveTo({x: b.position.x+b.size.width*(c+1), y: b.position.y});
+                                        n.visual_items[2].set({
+                                         stroke:  "#4ea1d3"}); 
+                                        c++;
+                                        n.block_order="none";
+                                    }
+                                   n.block_order="tail";
+
+                                    MathApp.selected_block.visual_items[3].set({
+                                        width:  MathApp.selected_block.visual_items[3].width+ SYMBOL_WIDTH,
+                                        left: b.position.x - b.size.width/2-2.5,
+                                        stroke:"#4ea1d3"
+                                    });
+                                    b.visual_items.push(MathApp.selected_block.visual_items[3]);
+                                    MathApp.selected_block.visual_items.pop();
+                                
+                                     MathApp.canvas.bringToFront(b.visual_items[3]);
+                                 }
+                               }
+                        
+                               else if(b.block_order=="tail"){
+                                b.block_order="none";
+
+                                //set <- single
+                                if(MathApp.selected_block.block_order=="single"){
+                                MathApp.selected_block.block_order="tail";         
+
+                                while(b.prev.block_order!="head"){
+                                    b = b.prev;
+                                }
+                                let head = b.prev;
+                                head.visual_items[3].set({
+                                    width:  head.visual_items[3].width+ b.size.width,
+                                    stroke:"#4ea1d3"
+                                });
+                                
+                                MathApp.canvas.bringToFront(head.visual_items[3]);
+                                }
+
+                                //set<-set
+                                else if(MathApp.selected_block.block_order=="head"){
+                                    MathApp.selected_block.block_order="none";
+                                    b.block_order="none";
+                                    MathApp.canvas.remove(MathApp.selected_block.visual_items[3]);
+                                    MathApp.selected_block.visual_items.pop();
+                                    let n = MathApp.selected_block;
+                                    let c = 1;
+
+                                    while(n.next!=null){
+                                        n= n.next;
+                                        n.moveTo({x: b.position.x+b.size.width*(c+1), y: b.position.y});
+                                        n.visual_items[2].set({ stroke:  "#4ea1d3"}); 
+                                        c++;
+                                        n.block_order="none";
+                                    }
+                                   n.block_order="tail";
+                                   
+                                    while(b.prev.block_order!="head"){
+                                        b = b.prev;               }
+                                    let head = b.prev;
+                                    head.visual_items[3].set({ width:  head.visual_items[3].width+ b.size.width*c,
+                                    stroke:"#4ea1d3"
+                                     });
+                                
+                                   MathApp.canvas.bringToFront(head.visual_items[3]);
+                             
+                                
+                                 }
+                                
+                                }
+                            }
+                            }
+
+      
+                            
+                            /* 왼쪽 결합 */
+                            else if( MathApp.selected_block.position.x<b.position.x
+                            && b.position.x-SYMBOL_WIDTH<=MathApp.selected_block.position.x
+                            && MathApp.selected_block.position.y<=b.position.y+SYMBOL_HEIGHT
+                            && b.position.y-SYMBOL_HEIGHT<MathApp.selected_block.position.y
+                            ){
+                                
+
+
+                                if(b.block_order!="tail"&&b.block_order!="none"){
+                                    
+                                    b.visual_items[2].set({
+                                    stroke:  "#4ea1d3",
+                                    strokeWidth : 1 });                            
+                                    MathApp.selected_block.visual_items[2].set({
+                                    stroke:  "#4ea1d3",
+                                    strokeWidth : 1});
+
+                                MathApp.selected_block.moveTo({x: b.position.x-b.size.width, y: b.position.y});
+                                b.prev=MathApp.selected_block;
+                                MathApp.selected_block.next=b;
+
+                                if(MathApp.selected_block.block_order=="single"){                                                        
+                                MathApp.selected_block.block_order="head";
+                    
+                                // single -> single
+                                if(b.block_order=="single"){
+                                b.block_order="tail";
+
+                                let boundary = new fabric.Rect({
+                                    left: MathApp.selected_block.position.x - b.size.width/2-2.5,
+                                    top: MathApp.selected_block.position.y - b.size.height/2-2.5,
+                                    width: b.size.width*2,
+                                    height: b.size.height,
+                                    fill: "rgba(0,0,0,0)",
+                                    stroke:  "#4ea1d3",
+                                    strokeWidth: 5,
+                                    selectable: false
+                                });
+                                MathApp.canvas.add(boundary);
+                                MathApp.selected_block.visual_items.push(boundary);
+                                }
+
+                                // single -> set
+                        
+                                else if(b.block_order=="head"){
+                             
+                                b.block_order="none";
+                    
+                                b.visual_items[3].set({
+                                    left: b.visual_items[3].left- b.size.width,
+                                    width:  b.visual_items[3].width+ b.size.width
+                                });
+
+                                MathApp.selected_block.visual_items.push(b.visual_items[3]);
+                                b.visual_items.pop();
+    
+                                MathApp.canvas.bringToFront(MathApp.selected_block.visual_items[3]);
+                                 }
+                                }
+
+                                else if(MathApp.selected_block.block_order=="tail"){
+                                MathApp.selected_block.block_order="none";
+                                
+                                //set -> single
+                                if(b.block_order=="single"){
+                                b.block_order="tail";
+                                let p = MathApp.selected_block;
+                                let c = 1;
+
+                                while(p.prev!=null){
+                                    p=p.prev;
+                                    p.moveTo({x: b.position.x-b.size.width*(c+1), y: b.position.y});
+                                    p.visual_items[2].set({
+                                         stroke:  "#4ea1d3"}); 
+                                    c++;
+                                }
+
+                                p.visual_items[3].set({
+                                        width:  p.visual_items[3].width+
+                                        SYMBOL_WIDTH ,
+                                    stroke:"#4ea1d3"                                   });                                
+                                MathApp.canvas.bringToFront(p.visual_items[3]);
+
+                                
+                                 }
+
+                                 //set -> set
+                                else if(b.block_order=="head"){
+                                b.block_order="none";
+                                let p = MathApp.selected_block;
+                                let c = 1;
+
+                                while(p.prev!=null){
+                                    p=p.prev;
+                                    p.moveTo({x: b.position.x-b.size.width*(c+1), y: b.position.y});
+                                    p.visual_items[2].set({
+                                         stroke: "#4ea1d3"}); 
+                                    c++;
+                                }
+                                MathApp.canvas.remove(b.visual_items[3]);
+                                b.visual_items.pop();    
+                                
+                                let c_ = 0;
+                                while(b!=null){
+                                    b=b.next;
+                                    c_++;
+                                }
+                                p.visual_items[3].set({
+                                        width:  p.visual_items[3].width+
+                                        SYMBOL_WIDTH*(c_)                 ,
+                                        stroke:"#4ea1d3"                   });                                
+                                MathApp.canvas.bringToFront(p.visual_items[3]);
+                                 }
+
+
+                                }
+
+                                }
+
+                        }
+                            
+                            
+                    }}
+                
+                    );
+                }
+                MathApp.canvas.requestRenderAll();
+            }
+        }
+
+        MathApp.transformToCanvasCoords = function(window_p) {
+            let rect = MathApp.canvas.getElement().getBoundingClientRect();
+            let canvas_p = {
+                x : window_p.x - rect.left,
+                y : window_p.y - rect.top
+            };
+            return canvas_p;
+        }
+        
+        MathApp.isInCanvas = function(window_p) {
+            let rect = MathApp.canvas.getElement().getBoundingClientRect();
+            if( window_p.x >= rect.left && 
+                window_p.x < rect.left + rect.width &&
+                window_p.y >= rect.top && 
+                window_p.y < rect.top + rect.height )
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        MathApp.findBlockOn = function(canvas_p) {
+            let x = canvas_p.x;
+            let y = canvas_p.y;
+            
+           for(let i=0; i < this.blocks.length; i++)
+            {
+                let block = this.blocks[i];
+
+                if( x >= block.position.x - block.size.width/2 &&
+                    x <= block.position.x + block.size.width/2 &&
+                    y >= block.position.y - block.size.height/2 &&
+                    y <= block.position.y + block.size.height/2 )
+                {
+                    return block;
+                }               
+            }
+            
+
+            return null;
+        }
+        MathApp.Split=function(canvas_p){
+            let x = canvas_p.x;
+            let y = canvas_p.y;
+         let button = this.buttons[0];
+     
+                if( x >= button.position.x  &&
+                    x <= button.position.x + button.size.width &&
+                    y >= button.position.y &&
+                    y <= button.position.y + button.size.height)
+                {  if(MathApp.selected_block.block_order!="single")
+                    {
+                        let p = MathApp.selected_block;
+                        while(p.prev!=null){
+                            p=p.prev;
+                        }
+                        //head
+                        MathApp.canvas.remove(p.visual_items[3]);
+                        p.visual_items.pop();
+                        
+                        while(p!=null){
+                            p.block_order="single";
+                            p.visual_items[2].set({ stroke:  "#d8e9ef",strokeWidth : 5 });  
+                            p.prev=null;
+                            a=p.next;
+                            p.next=null;
+                            p=a;
+
+                        }
+                     }  
+                     return;                           
+                }  
+        }
+        
+        MathApp.Reset = function(canvas_p){
+            let x = canvas_p.x;
+            let y = canvas_p.y;
+                let buttons = this.buttons[2];
+
+                if( x >= buttons.position.x  &&
+                    x <= buttons.position.x + buttons.size.width &&
+                    y >= buttons.position.y &&
+                    y <= buttons.position.y + buttons.size.height)
+                    
+                    {
+                        for(let b=0; b<10;b++){
+                        for(let a=0; a<100;a++)
+                        if(MathApp.blocks[a]!=null){
+                            MathApp.blocks[a].destroy();
+                            console.log(MathApp.blocks);
+                     }
+                    }}
+
+               }
+    
+               MathApp.Result = function(canvas_p){
+            let x = canvas_p.x;
+            let y = canvas_p.y;
+                let buttons = this.buttons[3];
+
+                if( x >= buttons.position.x  &&
+                    x <= buttons.position.x + buttons.size.width &&
+                    y >= buttons.position.y &&
+                    y <= buttons.position.y + buttons.size.height)
+                    
+                    {
+                        MathApp.Calc();
+                     }
+
+               }
+    
+
+
+        
+
+        
+        MathApp.Copy=function(canvas_p){
+            let x = canvas_p.x;
+            let y = canvas_p.y;
+                let buttons = this.buttons[1];
+
+                if( x >= buttons.position.x  &&
+                    x <= buttons.position.x + buttons.size.width &&
+                    y >= buttons.position.y &&
+                    y <= buttons.position.y + buttons.size.height)
+                {        
+                    let s = MathApp.selected_block;
+                    if(s.block_order=="single"){
+                    let new_symbol = new MathApp.Symbol(
+                        {x:s.position.x+80,y:s.position.y+80}, s.size, s.name);
+                    }
+                    
+                    else{
+                        let p = MathApp.selected_block;
+                        while(p.prev!=null){
+                            p=p.prev;
+                        }
+                        //head
+
+                        let n=p;
+                        while(n!=null){
+                            let a=new MathApp.Symbol(
+                        {x:n.position.x,y:n.position.y+100},s.size, n.name);
+                        n=n.next;
+                        }
+                    
+                        
+                        
+        }
+    }}
+
+    
+        
+        MathApp.Button = function(position, size, label) {
+
+            this.position = position;
+            this.size = size;
+            this.type = MathApp.block_types.BUTTON;
+            this.name=label;
+
+            this.visual_items = [];
+
+            let t = new fabric.Text(label, {
+            left: position.x+10,
+            top: position.y+10,
+            selectable: false,
+            fill:"black",
+            
+            fontSize: 15,
+            strokeWidth:4
+
+            });
+            let rect= new fabric.Rect({
+                        left: position.x,
+                        top: position.y,
+                        width: size.width,
+                        height: size.height,
+                        fill: "white",
+                        stroke: "black",
+                        strokeWidth: 1,
+                        selectable: false
+                    });
+                         
+         
+                    MathApp.canvas.add(rect);
+                    MathApp.canvas.add(t);
+            
+                    this.visual_items.push(rect);
+                    this.visual_items.push(t);
+
+            }
+
+            
+
+    
+        //
+        MathApp.Block = function(position, size) {
+            this.position = position;
+            this.size = size;
+            this.type = MathApp.block_types.UNDEFINED;
+            
+            //
+            this.block_order="single";
+            this.prev=null;
+            this.next=null;
+
+            this.visual_items = [];
+
+            MathApp.blocks.push(this);
+        }
+
+        MathApp.Block.prototype.onDeselected = function() {
+
+            if(this.block_order=="single"){
+            this.visual_items[2].set({
+                stroke: "#d8e9ef"
+            });
+        }
+            
+            else{
+                let p = this;
+                p.visual_items[2].set({
+               stroke:  "#4ea1d3"
+            });
+                while(p.prev!=null){
+                    p=p.prev;
+                    p.visual_items[2].set({
+               stroke: "#4ea1d3"
+            });
+                }
+                p.visual_items[3].set({
+               stroke: "#4ea1d3"
+            });
+            let n= this;
+            while(n.next!=null){
+                n=n.next;
+                n.visual_items[2].set({
+               stroke: "#4ea1d3"
+            });
+            }
+        }}
+
+        MathApp.Block.prototype.onSelected = function() {
+
+            if(this.block_order=="single"){
+            this.visual_items[2].set({
+               stroke: "#e85a71"
+            });
+        }
+           else{
+                let p = this;
+                p.visual_items[2].set({
+               stroke:  "#e85a71"
+            });
+                while(p.prev!=null){
+                    p=p.prev;
+                    p.visual_items[2].set({
+               stroke: "#e85a71"
+            });
+                }
+                p.visual_items[3].set({
+               stroke: "#e85a71"
+            });
+            let n= this;
+            while(n.next!=null){
+                n=n.next;
+                n.visual_items[2].set({
+               stroke:  "#e85a71"
+            });
+            }
+            
+
+            MathApp.canvas.bringToFront(n.visual_items[3]);
+
+            
+            }
+/*
+            this.visual_items.forEach(item => {
+                MathApp.canvas.bringToFront(item);
+            });*/
+        }
+
+        MathApp.Block.prototype.moveTo = function(p) {
+            let tx = p.x - this.position.x;
+            let ty = p.y - this.position.y;
+
+            this.translate({x: tx, y: ty});
+        }
+
+        MathApp.Block.prototype.translate = function(v) {
+            this.position.x += v.x;
+            this.position.y += v.y;
+
+            this.visual_items.forEach(item => {
+                item.left += v.x;
+                item.top += v.y;
+            });
+        }
+
+        MathApp.Block.prototype.destroy = function() {
+            if(this == MathApp.selected_block)
+            {
+                MathApp.selected_block = null;
+                this.onDeselected();
+            }
+
+            this.visual_items.forEach(item => {
+                MathApp.canvas.remove(item);
+            });
+            this.visual_items = [];
+            
+            let index = MathApp.blocks.indexOf(this);
+            if(index > -1)
+            {
+                MathApp.blocks.splice(index, 1);
+            }
+        }
+
+        //
+        MathApp.Symbol = function(position, size, name) {
+            MathApp.Block.call(this, position, size);
+            this.type = MathApp.block_types.SYMBOL;
+            this.name = name;
+
+            //기능
+            
+            let block = this;
+
+            if (name in MathApp.symbol_paths) 
+            {
+                let path ="source/"+ MathApp.symbol_paths[name] + ".jpg";
+                fabric.Image.fromURL(path, function(img) {
+                    // (0) Background
+                    let background = new fabric.Rect({
+                        left: position.x - size.width/2,
+                        top: position.y - size.height/2,
+                        width: size.width,
+                        height: size.height,
+                        fill: "rgba(255,255,255,1)",
+                        stroke: "rgba(0,0,0,0)",
+                        selectable: false
+                    });
+
+                    // (1) Image
+                    img.scaleToWidth(size.width);
+                    img.scaleToHeight(size.height);
+
+                    let img_w = img.getScaledWidth();
+                    let img_h = img.getScaledHeight();
+
+                    img.set({
+                        left: position.x - img_w/2,
+                        top: position.y - img_h/2,
+                        selectable: false
+                    });
+
+                    // (2) Boundary
+                    let boundary = new fabric.Rect({
+                        left: position.x - size.width/2,
+                        top: position.y - size.height/2,
+                        width: size.width,
+                        height: size.height,
+                        fill: "rgba(0,0,0,0)",
+                        stroke: "#d8e9ef",
+                        strokeWidth: 5,
+                        selectable: false
+                    });
+
+                    //
+                    MathApp.canvas.add(background);
+                    MathApp.canvas.add(img);
+                    MathApp.canvas.add(boundary);
+
+                    //
+                    block.visual_items.push(background);
+                    block.visual_items.push(img);
+                    block.visual_items.push(boundary);
+                });
+            }
+        }
+
+        MathApp.Symbol.prototype = Object.create(MathApp.Block.prototype);
+       
+
+
+
+        $(document).ready(function() {
+            MathApp.initialize();
+        });
+    </script>
+    
+</body>
+</html>
+
